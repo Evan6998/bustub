@@ -93,7 +93,7 @@ class HyperLogLog {
   int16_t b_;
 
   /** @brief Buckets to store the maximum number of leading zeros observed for each hash value. */
-  std::vector<uint64_t> buckets;
+  std::vector<uint64_t> buckets_;
 };
 
 }  // namespace bustub

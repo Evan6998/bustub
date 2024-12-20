@@ -22,14 +22,15 @@ auto HyperLogLogPresto<KeyType>::CountOfRightMostContiguousZeros(const std::bits
 template <typename KeyType>
 auto HyperLogLogPresto<KeyType>::AddElem(KeyType val) -> void {
   /** @TODO(student) Implement this function! */
-  auto hashVal = CalculateHash(val);
-  std::bitset<BITSET_CAPACITY> bin{hashVal};
-  auto rightMostZeros = CountOfRightMostContiguousZeros(bin);
-  std::bitset<DENSE_BUCKET_SIZE> dense{rightMostZeros & DENSE_MASK};
-  std::bitset<OVERFLOW_BUCKET_SIZE> overflow{(rightMostZeros >> DENSE_BUCKET_SIZE) & OVERFLOW_MASK};
+  auto hash_val = CalculateHash(val);
+  std::bitset<BITSET_CAPACITY> bin{hash_val};
+  auto right_most_zeros = CountOfRightMostContiguousZeros(bin);
+  std::bitset<DENSE_BUCKET_SIZE> dense{right_most_zeros & DENSE_MASK};
+  std::bitset<OVERFLOW_BUCKET_SIZE> overflow{(right_most_zeros >> DENSE_BUCKET_SIZE) & OVERFLOW_MASK};
   auto bucket = (bin >> (BITSET_CAPACITY - b_)).to_ulong();
 
-  if (rightMostZeros > (overflow_bucket_[bucket].to_ulong() << DENSE_BUCKET_SIZE) + dense_bucket_[bucket].to_ulong()) {
+  if (right_most_zeros >
+      (overflow_bucket_[bucket].to_ulong() << DENSE_BUCKET_SIZE) + dense_bucket_[bucket].to_ulong()) {
     dense_bucket_[bucket] = dense;
     overflow_bucket_[bucket] = overflow;
   }
@@ -43,8 +44,8 @@ auto HyperLogLogPresto<T>::ComputeCardinality() -> void {
     sum += std::pow(2, -(static_cast<double>(dense_bucket_[i].to_ulong()) +
                          static_cast<double>(overflow_bucket_[i].to_ulong() << DENSE_BUCKET_SIZE)));
   }
-  auto alphaMM = CONSTANT * dense_bucket_.size() * dense_bucket_.size();
-  cardinality_ = std::floor(alphaMM / sum);
+  auto alpha_mm = CONSTANT * dense_bucket_.size() * dense_bucket_.size();
+  cardinality_ = std::floor(alpha_mm / sum);
 }
 
 template class HyperLogLogPresto<int64_t>;
