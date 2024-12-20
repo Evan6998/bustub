@@ -6,6 +6,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <algorithm>
 
 #include "common/util/hash_util.h"
 
@@ -14,8 +15,12 @@
 
 namespace bustub {
 
+class HyperLogLogTest;
+
 template <typename KeyType>
 class HyperLogLog {
+  friend class HyperLogLogTest;
+
   /** @brief Constant for HLL. */
   static constexpr double CONSTANT = 0.79402;
 
@@ -83,6 +88,12 @@ class HyperLogLog {
   size_t cardinality_;
 
   /** @todo (student) can add their data structures that support HyperLogLog */
+
+  /** @brief Number of initial bits in a binary representation of a hash value. */
+  int16_t b_;
+
+  /** @brief Buckets to store the maximum number of leading zeros observed for each hash value. */
+  std::vector<uint64_t> buckets;
 };
 
 }  // namespace bustub
