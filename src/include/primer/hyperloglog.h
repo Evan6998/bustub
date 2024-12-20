@@ -1,12 +1,12 @@
 #pragma once
 
+#include <algorithm>
 #include <bitset>
 #include <memory>
 #include <mutex>  // NOLINT
 #include <string>
 #include <utility>
 #include <vector>
-#include <algorithm>
 
 #include "common/util/hash_util.h"
 

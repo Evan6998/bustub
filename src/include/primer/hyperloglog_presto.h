@@ -13,8 +13,14 @@
 
 /** @brief Dense bucket size. */
 #define DENSE_BUCKET_SIZE 4
+/** @brief Dense bucket mask. */
+#define DENSE_MASK 0xF
 /** @brief Overflow bucket size. */
 #define OVERFLOW_BUCKET_SIZE 3
+/** @brief Overflow bucket mask. */
+#define OVERFLOW_MASK 0x7
+/** @brief Capacity of the bitset stream. */
+#define BITSET_CAPACITY 64
 
 /** @brief Total bucket size. */
 #define TOTAL_BUCKET_SIZE (DENSE_BUCKET_SIZE + OVERFLOW_BUCKET_SIZE)
@@ -55,6 +61,14 @@ class HyperLogLogPresto {
   auto ComputeCardinality() -> void;
 
  private:
+  /**
+   * @brief Function that computes the count of the rightmost contiguous zeros(LSB).
+   *
+   * @param[in] bset - binary values of a given bitset
+   * @returns rightmost contiguous zeros of given binary set
+   */
+  auto CountOfRightMostContiguousZeros(const std::bitset<BITSET_CAPACITY> &bset) const -> uint64_t;
+
   /** @brief Calculate Hash.
    *
    * @param[in] val
@@ -83,6 +97,8 @@ class HyperLogLogPresto {
   uint64_t cardinality_;
 
   // TODO(student) - can add more data structures as required
+  /** @brief Number of initial bits in a binary representation of a hash value. */
+  uint16_t b_;
 };
 
 }  // namespace bustub

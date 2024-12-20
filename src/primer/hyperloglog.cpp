@@ -36,11 +36,11 @@ auto HyperLogLog<KeyType>::AddElem(KeyType val) -> void {
 template <typename KeyType>
 auto HyperLogLog<KeyType>::ComputeCardinality() -> void {
   double sum = 0.0;
-  for (auto& bucket : buckets) {
+  for (auto &bucket : buckets) {
     sum += std::pow(2, -static_cast<double>(bucket));
   }
   auto alphaMM = CONSTANT * buckets.size() * buckets.size();
-  cardinality_ = alphaMM / sum;
+  cardinality_ = std::floor(alphaMM / sum);
 }
 
 template class HyperLogLog<int64_t>;
