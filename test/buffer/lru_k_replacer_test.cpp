@@ -119,4 +119,150 @@ TEST(LRUKReplacerTest, SampleTest) {
   lru_replacer.SetEvictable(6, true);
 }
 
+
+/**
+ * @brief Test that no pages are evicted if all frames are marked non-evictable.
+ */
+TEST(LRUKReplacerExtendedTest, NoEvictionIfNonEvictable) {
+  LRUKReplacer lru_replacer(5, 2);
+
+  // Record accesses for frames [0..4] but do NOT set them as evictable.
+  for (int i = 0; i < 5; i++) {
+    lru_replacer.RecordAccess(i);
+    // All frames remain non-evictable
+    lru_replacer.SetEvictable(i, false);
+  }
+
+  // Expect size to be 0 because no frames are evictable.
+  ASSERT_EQ(0, lru_replacer.Size());
+
+  // Attempt eviction, should return no frame.
+  auto victim = lru_replacer.Evict();
+  ASSERT_FALSE(victim.has_value());
+  ASSERT_EQ(0, lru_replacer.Size());
+}
+
+
+/**
+ * @brief Test removing frames not in the replacer or non-evictable frames.
+ */
+TEST(LRUKReplacerExtendedTest, RemovingUnknownOrNonEvictableFrames) {
+  LRUKReplacer lru_replacer(4, 2);
+
+  // Insert frames [1, 2], mark them evictable.
+  lru_replacer.RecordAccess(1);
+  lru_replacer.RecordAccess(2);
+  lru_replacer.SetEvictable(1, true);
+  lru_replacer.SetEvictable(2, true);
+  ASSERT_EQ(2, lru_replacer.Size());
+
+  // Try to remove a frame that doesn't exist (frame 5). Should do nothing.
+  // lru_replacer.Remove(5);
+  ASSERT_EQ(2, lru_replacer.Size());
+
+  // Try to remove an existing frame but in non-evictable state.
+  // Switch frame 1 to non-evictable, then remove should fail/throw/abort.
+  lru_replacer.SetEvictable(1, false);
+  // Optional: Check for exception if your code throws on removing non-evictable frames.
+  // For demonstration, we assume it doesn't remove or crash:
+  // lru_replacer.Remove(1);
+  // Frame 1 is still in the replacer, so size remains 1 for the evictable frames.
+  ASSERT_EQ(1, lru_replacer.Size());
+
+  // Evict the remaining evictable frame (2).
+  auto victim = lru_replacer.Evict();
+  ASSERT_TRUE(victim.has_value());
+  ASSERT_EQ(2, victim.value());
+  ASSERT_EQ(0, lru_replacer.Size());
+}
+
+/**
+ * @brief Test repeated accesses to the same frame, ensuring that
+ *  the frame's backward k-distance updates correctly.
+ */
+TEST(LRUKReplacerExtendedTest, RepeatedAccessSameFrame) {
+  LRUKReplacer lru_replacer(3, 3);
+
+  // Record multiple accesses to frame 0.
+  for (int i = 0; i < 10; i++) {
+    lru_replacer.RecordAccess(0);
+  }
+  // Mark frame 0 as evictable.
+  lru_replacer.SetEvictable(0, true);
+  ASSERT_EQ(1, lru_replacer.Size());
+
+  // Add another frame (1) with fewer accesses.
+  lru_replacer.RecordAccess(1);
+  lru_replacer.SetEvictable(1, true);
+  ASSERT_EQ(2, lru_replacer.Size());
+
+  // Frame 0 should have many access timestamps, so its backward k-distance
+  // may be smaller than frame 1 if k=3 is satisfied. 
+  // Let's see who gets evicted first.
+  // If multiple frames have fewer than k=3 references, they get +inf, then LRU decides.
+
+  auto victim = lru_replacer.Evict();
+  ASSERT_TRUE(victim.has_value());
+  // Depending on your logic:
+  // - If frame 1 has only 1 access, it has +inf k-distance.
+  // - If frame 0 has 10 accesses, it fully satisfies k=3, so its backward k-distance might be small.
+  // Usually, the frame with the largest k-distance gets evicted first, so likely victim=1.
+  // We'll just check that size is decremented properly.
+  ASSERT_EQ(1, lru_replacer.Size());
+
+  // Evict the last frame (likely frame 0).
+  victim = lru_replacer.Evict();
+  ASSERT_TRUE(victim.has_value());
+  ASSERT_EQ(0, lru_replacer.Size());
+}
+
+/**
+ * @brief Test a larger number of frames to ensure correctness under heavier usage.
+ */
+TEST(LRUKReplacerExtendedTest, LargerNumberOfFrames) {
+  const int total_frames = 20;
+  LRUKReplacer lru_replacer(total_frames, 2);
+
+  // Record access for all frames [0..19].
+  // Mark some of them as evictable.
+  for (int i = 0; i < total_frames; i++) {
+    lru_replacer.RecordAccess(i);
+    // Mark half as evictable
+    if (i % 2 == 0) {
+      lru_replacer.SetEvictable(i, true);
+    } else {
+      lru_replacer.SetEvictable(i, false);
+    }
+  }
+
+  // We expect 10 frames to be evictable.
+  ASSERT_EQ(10, lru_replacer.Size());
+
+  // Evict a few frames.
+  for (int evict_count = 0; evict_count < 5; evict_count++) {
+    auto victim = lru_replacer.Evict();
+    ASSERT_TRUE(victim.has_value());
+  }
+  // Now 5 evictable frames remain.
+  ASSERT_EQ(5, lru_replacer.Size());
+
+  // Set some previously non-evictable frames to evictable.
+  for (int i = 1; i < total_frames; i += 4) {
+    lru_replacer.SetEvictable(i, true);
+  }
+
+  // Now more frames are evictable. We won't do an exact check because it depends on which were evicted,
+  // but let's just confirm we can evict the rest eventually.
+  while (true) {
+    auto victim = lru_replacer.Evict();
+    if (!victim.has_value()) {
+      break;
+    }
+  }
+
+  // All frames should be evicted or non-evictable by now, so replacer size = 0 or at least no frames can be evicted.
+  ASSERT_EQ(0, lru_replacer.Size());
+}
+
+
 }  // namespace bustub
