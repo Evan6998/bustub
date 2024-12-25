@@ -16,6 +16,7 @@
 #include <list>
 #include <mutex>  // NOLINT
 #include <optional>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -27,14 +28,30 @@ namespace bustub {
 enum class AccessType { Unknown = 0, Lookup, Scan, Index };
 
 class LRUKNode {
+
+ public:
+  LRUKNode(size_t k, frame_id_t fid);
+
+  auto Evictable () -> bool;
+
+  auto KthDistance(size_t ts) -> size_t;
+
+  auto EarlistTimeStamp() -> size_t;
+
+  void SetEvictable(bool set_evictable);
+
+  void Access(size_t ts);
+
+  void Evict();
+
  private:
   /** History of last seen K timestamps of this page. Least recent timestamp stored in front. */
   // Remove maybe_unused if you start using them. Feel free to change the member variables as you want.
 
-  [[maybe_unused]] std::list<size_t> history_;
-  [[maybe_unused]] size_t k_;
-  [[maybe_unused]] frame_id_t fid_;
-  [[maybe_unused]] bool is_evictable_{false};
+  std::list<size_t> history_;
+  size_t k_;
+  [[maybe_unused]]frame_id_t fid_;
+  bool is_evictable_{false};
 };
 
 /**
