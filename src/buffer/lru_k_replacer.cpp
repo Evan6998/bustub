@@ -17,18 +17,18 @@ namespace bustub {
 
 LRUKNode::LRUKNode(size_t k, frame_id_t fid): k_(k), fid_(fid) {};
 
-auto LRUKNode::Evictable () -> bool {
+auto LRUKNode::Evictable () const -> bool {
   return is_evictable_;
 }
 
-auto LRUKNode::KthDistance(size_t ts) -> size_t {
+auto LRUKNode::KthDistance(size_t ts) const -> size_t {
   if (history_.size() < k_) {
     return std::numeric_limits<size_t>::max();
   }
   return ts - history_.back();
 }
 
-auto LRUKNode::EarlistTimeStamp() -> size_t {
+auto LRUKNode::EarlistTimeStamp() const -> size_t {
   return history_.front();
 }
 
@@ -55,29 +55,35 @@ LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : replacer_size_(num_fra
 }
 
 auto LRUKReplacer::Evict() -> std::optional<frame_id_t> { 
-  frame_id_t victim = 0;
-  size_t largest = 0;
-  size_t earliest = 0;
-  for (auto iter = node_store_.begin(); iter != node_store_.end(); iter++) {
-    if (!iter->second.Evictable()) continue;
-    auto fid = iter->first;
-    auto node = iter->second;
-    auto kd = node.KthDistance(current_timestamp_);
-    if (kd > largest) {
-      largest = kd;
+  std::optional<frame_id_t> victim = std::nullopt;
+  size_t largest_distance = 0;
+  size_t earliest_timestamp = std::numeric_limits<size_t>::max();
+
+  for (const auto &[fid, node] : node_store_) {
+    if (!node.Evictable()) {
+      continue;
+    }
+
+    auto k_distance = node.KthDistance(current_timestamp_);
+    auto earliest_time = node.EarlistTimeStamp();
+
+    // Prioritize the frame with the largest k-distance
+    if (!victim || k_distance > largest_distance || 
+       (k_distance == largest_distance && earliest_time < earliest_timestamp)) {
       victim = fid;
-      earliest = node.EarlistTimeStamp();
-    } else if (kd == largest && node.EarlistTimeStamp() < earliest) {
-      victim = fid;
-      earliest = node.EarlistTimeStamp();
+      largest_distance = k_distance;
+      earliest_timestamp = earliest_time;
     }
   }
-  if (victim != 0) {
-    node_store_.at(victim).Evict();
+
+  if (victim) {
+    // Update state and evict the victim
+    auto &node = node_store_.at(*victim);
+    node.Evict();
     curr_size_ -= 1;
-    return victim;
-  };
-  return std::nullopt; 
+  }
+
+  return victim;
 }
 
 void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType access_type) {

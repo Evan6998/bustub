@@ -32,11 +32,11 @@ class LRUKNode {
  public:
   LRUKNode(size_t k, frame_id_t fid);
 
-  auto Evictable () -> bool;
+  auto Evictable() const -> bool;
 
-  auto KthDistance(size_t ts) -> size_t;
+  auto KthDistance(size_t ts) const -> size_t;
 
-  auto EarlistTimeStamp() -> size_t;
+  auto EarlistTimeStamp() const -> size_t;
 
   void SetEvictable(bool set_evictable);
 
