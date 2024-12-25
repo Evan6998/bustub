@@ -17,6 +17,21 @@ namespace bustub {
 
 LRUKNode::LRUKNode(size_t k, frame_id_t fid) : k_(k), fid_(fid){};
 
+LRUKNode::LRUKNode(LRUKNode &&other) 
+    : k_(other.k_),
+      fid_(other.fid_) {
+  is_evictable_ = other.is_evictable_;
+  history_ = std::move(other.history_);
+}
+
+auto LRUKNode::operator=(LRUKNode &&other) -> LRUKNode & {
+  k_ = other.k_;
+  fid_ = other.fid_;
+  is_evictable_ = other.is_evictable_;
+  history_ = std::move(other.history_);
+  return *this;
+}
+
 auto LRUKNode::Evictable() const -> bool { return is_evictable_; }
 
 auto LRUKNode::KthDistance(size_t ts) const -> size_t {

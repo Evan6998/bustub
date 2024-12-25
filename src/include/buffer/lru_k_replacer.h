@@ -30,6 +30,12 @@ enum class AccessType { Unknown = 0, Lookup, Scan, Index };
 class LRUKNode {
  public:
   LRUKNode(size_t k, frame_id_t fid);
+  LRUKNode(LRUKNode &&other);
+  
+  auto operator=(LRUKNode &&other) -> LRUKNode &;
+
+  LRUKNode(const LRUKNode &) = delete;
+  LRUKNode &operator=(const LRUKNode &) = delete;
 
   auto Evictable() const -> bool;
 
