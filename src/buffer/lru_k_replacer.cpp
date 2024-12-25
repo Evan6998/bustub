@@ -41,7 +41,7 @@ auto LRUKNode::KthDistance(size_t ts) const -> size_t {
   return ts - history_.back();
 }
 
-auto LRUKNode::EarlistTimeStamp() const -> size_t { return history_.front(); }
+auto LRUKNode::LatestTimeStamp() const -> size_t { return history_.front(); }
 
 void LRUKNode::Access(size_t ts) {
   if (history_.size() >= k_) {
@@ -76,14 +76,14 @@ auto LRUKReplacer::Evict() -> std::optional<frame_id_t> {
     }
 
     auto k_distance = node.KthDistance(current_timestamp_);
-    auto earliest_time = node.EarlistTimeStamp();
+    auto ts = node.LatestTimeStamp();
 
     // Prioritize the frame with the largest k-distance
     if (!victim || k_distance > largest_distance ||
-        (k_distance == largest_distance && earliest_time < earliest_timestamp)) {
+        (k_distance == largest_distance && ts < earliest_timestamp)) {
       victim = fid;
       largest_distance = k_distance;
-      earliest_timestamp = earliest_time;
+      earliest_timestamp = ts;
     }
   }
 

@@ -31,7 +31,7 @@ class LRUKNode {
  public:
   LRUKNode(size_t k, frame_id_t fid);
   LRUKNode(LRUKNode &&other);
-  
+
   auto operator=(LRUKNode &&other) -> LRUKNode &;
 
   LRUKNode(const LRUKNode &) = delete;
@@ -41,7 +41,7 @@ class LRUKNode {
 
   auto KthDistance(size_t ts) const -> size_t;
 
-  auto EarlistTimeStamp() const -> size_t;
+  auto LatestTimeStamp() const -> size_t;
 
   void SetEvictable(bool set_evictable);
 
