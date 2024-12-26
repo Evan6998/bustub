@@ -17,9 +17,7 @@ namespace bustub {
 
 LRUKNode::LRUKNode(size_t k, frame_id_t fid) : k_(k), fid_(fid){};
 
-LRUKNode::LRUKNode(LRUKNode &&other) 
-    : k_(other.k_),
-      fid_(other.fid_) {
+LRUKNode::LRUKNode(LRUKNode &&other) : k_(other.k_), fid_(other.fid_) {
   is_evictable_ = other.is_evictable_;
   history_ = std::move(other.history_);
 }
@@ -79,8 +77,7 @@ auto LRUKReplacer::Evict() -> std::optional<frame_id_t> {
     auto ts = node.LatestTimeStamp();
 
     // Prioritize the frame with the largest k-distance
-    if (!victim || k_distance > largest_distance ||
-        (k_distance == largest_distance && ts < earliest_timestamp)) {
+    if (!victim || k_distance > largest_distance || (k_distance == largest_distance && ts < earliest_timestamp)) {
       victim = fid;
       largest_distance = k_distance;
       earliest_timestamp = ts;

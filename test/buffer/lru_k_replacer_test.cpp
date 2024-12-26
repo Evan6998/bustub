@@ -119,7 +119,6 @@ TEST(LRUKReplacerTest, SampleTest) {
   lru_replacer.SetEvictable(6, true);
 }
 
-
 /**
  * @brief Test that no pages are evicted if all frames are marked non-evictable.
  */
@@ -141,7 +140,6 @@ TEST(LRUKReplacerExtendedTest, NoEvictionIfNonEvictable) {
   ASSERT_FALSE(victim.has_value());
   ASSERT_EQ(0, lru_replacer.Size());
 }
-
 
 /**
  * @brief Test removing frames not in the replacer or non-evictable frames.
@@ -197,7 +195,7 @@ TEST(LRUKReplacerExtendedTest, RepeatedAccessSameFrame) {
   ASSERT_EQ(2, lru_replacer.Size());
 
   // Frame 0 should have many access timestamps, so its backward k-distance
-  // may be smaller than frame 1 if k=3 is satisfied. 
+  // may be smaller than frame 1 if k=3 is satisfied.
   // Let's see who gets evicted first.
   // If multiple frames have fewer than k=3 references, they get +inf, then LRU decides.
 
@@ -263,6 +261,5 @@ TEST(LRUKReplacerExtendedTest, LargerNumberOfFrames) {
   // All frames should be evicted or non-evictable by now, so replacer size = 0 or at least no frames can be evicted.
   ASSERT_EQ(0, lru_replacer.Size());
 }
-
 
 }  // namespace bustub
