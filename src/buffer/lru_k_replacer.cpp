@@ -22,7 +22,7 @@ LRUKNode::LRUKNode(LRUKNode &&other) : k_(other.k_), fid_(other.fid_) {
   history_ = std::move(other.history_);
 }
 
-auto LRUKNode::operator=(LRUKNode &&other) -> LRUKNode & {
+auto LRUKNode::operator=(LRUKNode &&other) noexcept -> LRUKNode & {
   k_ = other.k_;
   fid_ = other.fid_;
   is_evictable_ = other.is_evictable_;
@@ -95,7 +95,7 @@ auto LRUKReplacer::Evict() -> std::optional<frame_id_t> {
 }
 
 void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType access_type) {
-  if (frame_id < 0 || (size_t)frame_id >= replacer_size_) {
+  if (frame_id < 0 || static_cast<size_t>(frame_id) >= replacer_size_) {
     throw std::invalid_argument("Invalid frame id.");
   }
   std::scoped_lock<std::mutex> slk(latch_);
@@ -104,7 +104,7 @@ void LRUKReplacer::RecordAccess(frame_id_t frame_id, [[maybe_unused]] AccessType
 }
 
 void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
-  if (frame_id < 0 || (size_t)frame_id >= replacer_size_) {
+  if (frame_id < 0 || static_cast<size_t>(frame_id) >= replacer_size_) {
     throw std::invalid_argument("Invalid frame id.");
   }
   std::scoped_lock<std::mutex> slk(latch_);
@@ -121,7 +121,9 @@ void LRUKReplacer::SetEvictable(frame_id_t frame_id, bool set_evictable) {
 }
 
 void LRUKReplacer::Remove(frame_id_t frame_id) {
-  if (frame_id < 0 || (size_t)frame_id >= replacer_size_) return;
+  if (frame_id < 0 || static_cast<size_t>(frame_id) >= replacer_size_) {
+    return;
+  }
   std::scoped_lock<std::mutex> slk(latch_);
   auto &node = node_store_.at(frame_id);
   if (!node.Evictable()) {

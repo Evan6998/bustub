@@ -32,10 +32,6 @@ ReadPageGuard::ReadPageGuard(page_id_t page_id, std::shared_ptr<FrameHeader> fra
   is_valid_ = true;
 
   frame_->rwlatch_.lock_shared();
-  frame_->pin_count_++;
-  frame_->page_id = page_id;
-  replacer_->SetEvictable(frame_->frame_id_, false);
-  replacer_->RecordAccess(frame_->frame_id_);
 }
 
 /**
@@ -87,7 +83,7 @@ auto ReadPageGuard::operator=(ReadPageGuard &&that) noexcept -> ReadPageGuard & 
   replacer_ = std::move(that.replacer_);
   bpm_latch_ = std::move(that.bpm_latch_);
   is_valid_ = that.is_valid_;
-  
+
   that.is_valid_ = false;
   return *this;
 }
@@ -128,7 +124,9 @@ auto ReadPageGuard::IsDirty() const -> bool {
  * TODO(P1): Add implementation.
  */
 void ReadPageGuard::Drop() {
-  if (!is_valid_) return;
+  if (!is_valid_) {
+    return;
+  }
 
   is_valid_ = false;
   frame_->rwlatch_.unlock_shared();
@@ -166,11 +164,6 @@ WritePageGuard::WritePageGuard(page_id_t page_id, std::shared_ptr<FrameHeader> f
 
   // Read lock for this frame before bpm_latch_.
   frame_->rwlatch_.lock();
-  frame_->pin_count_++;
-  frame_->page_id = page_id;
-  frame_->is_dirty_ = true;
-  replacer_->SetEvictable(frame_->frame_id_, false);
-  replacer_->RecordAccess(frame_->frame_id_);
 }
 
 /**
@@ -281,7 +274,7 @@ void WritePageGuard::Drop() {
 
   std::scoped_lock slk(*bpm_latch_);
   frame_->pin_count_--;
-  // we shall set it evictable even if it's dirty. 
+  // we shall set it evictable even if it's dirty.
   // otherwise never can we use it.
   if (frame_->pin_count_ == 0) {
     replacer_->SetEvictable(frame_->frame_id_, true);

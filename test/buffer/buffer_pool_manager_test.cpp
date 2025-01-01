@@ -200,7 +200,6 @@ TEST(BufferPoolManagerTest, PagePinMediumTest) {
     EXPECT_EQ(1, bpm->GetPinCount(pid));
     pages.erase(pages.begin());
     EXPECT_EQ(0, bpm->GetPinCount(pid));
-
   }
 
   // Scenario: All of the pin counts of the pages we haven't dropped yet should still be 1.
@@ -316,7 +315,7 @@ TEST(BufferPoolManagerTest, ContentionTest) {
   thread1.join();
 }
 
-TEST(BufferPoolManagerTest, DISABLED_DeadlockTest) {
+TEST(BufferPoolManagerTest, DeadlockTest) {
   auto disk_manager = std::make_shared<DiskManager>(db_fname);
   auto bpm = std::make_shared<BufferPoolManager>(FRAMES, disk_manager.get(), K_DIST);
 

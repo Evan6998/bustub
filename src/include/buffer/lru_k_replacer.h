@@ -32,10 +32,10 @@ class LRUKNode {
   LRUKNode(size_t k, frame_id_t fid);
   LRUKNode(LRUKNode &&other);
 
-  auto operator=(LRUKNode &&other) -> LRUKNode &;
+  auto operator=(LRUKNode &&other) noexcept -> LRUKNode &;
 
   LRUKNode(const LRUKNode &) = delete;
-  LRUKNode &operator=(const LRUKNode &) = delete;
+  auto operator=(const LRUKNode &) -> LRUKNode & = delete;
 
   auto Evictable() const -> bool;
 

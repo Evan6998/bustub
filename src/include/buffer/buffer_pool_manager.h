@@ -96,7 +96,7 @@ class FrameHeader {
    * else in the buffer pool manager...
    */
 
-  page_id_t page_id;
+  page_id_t page_id{-1};
 };
 
 /**
@@ -177,7 +177,6 @@ class BufferPoolManager {
 
   auto GetFrame(page_id_t page_id) -> std::optional<std::shared_ptr<FrameHeader>>;
 
-  void SwapIn(page_id_t page_id, std::shared_ptr<FrameHeader> frame);
-
+  void SwapIn(page_id_t page_id, const std::shared_ptr<FrameHeader> frame);
 };
 }  // namespace bustub

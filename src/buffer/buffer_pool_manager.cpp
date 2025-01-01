@@ -21,7 +21,9 @@ namespace bustub {
  *
  * @param frame_id The frame ID / index of the frame we are creating a header for.
  */
-FrameHeader::FrameHeader(frame_id_t frame_id) : frame_id_(frame_id), data_(BUSTUB_PAGE_SIZE, 0), page_id(-1) { Reset(); }
+FrameHeader::FrameHeader(frame_id_t frame_id) : frame_id_(frame_id), data_(BUSTUB_PAGE_SIZE, 0) {
+  Reset();
+}
 
 /**
  * @brief Get a raw const pointer to the frame's data.
@@ -126,7 +128,7 @@ auto BufferPoolManager::Size() const -> size_t { return num_frames_; }
 auto BufferPoolManager::NewPage() -> page_id_t {
   std::scoped_lock slk(*bpm_latch_);
 
-  disk_scheduler_.get()->IncreaseDiskSpace(next_page_id_);
+  disk_scheduler_->IncreaseDiskSpace(next_page_id_);
   return next_page_id_++;
 }
 
@@ -179,9 +181,13 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
   std::scoped_lock slk(*bpm_latch_);
 
   auto f = GetFrame(page_id);
-  if (!f) return true;
+  if (!f) {
+    return true;
+  }
   auto frame = f.value();
-  if (0 != frame->pin_count_) return false;
+  if (0 != frame->pin_count_) {
+    return false;
+  }
 
   if (frame->is_dirty_) {
     FlushPage(frame->page_id);
@@ -196,9 +202,7 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
   return true;
 }
 
-
-
-void BufferPoolManager::SwapIn(page_id_t page_id, std::shared_ptr<FrameHeader> frame) {
+void BufferPoolManager::SwapIn(page_id_t page_id, const std::shared_ptr<FrameHeader> frame) {
   BUSTUB_ENSURE(page_id >= 0, "Invalid Page ID\n")
   auto promise = disk_scheduler_->CreatePromise();
   auto future = promise.get_future();
@@ -249,12 +253,18 @@ void BufferPoolManager::SwapIn(page_id_t page_id, std::shared_ptr<FrameHeader> f
  * returns `std::nullopt`, otherwise returns a `WritePageGuard` ensuring exclusive and mutable access to a page's data.
  */
 auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_type) -> std::optional<WritePageGuard> {
-  std::scoped_lock slk(*bpm_latch_);
+  bpm_latch_->lock();
 
   // page already exists in frames
   auto f_exist = GetFrame(page_id);
   if (f_exist.has_value()) {
     auto frame = f_exist.value();
+    frame->pin_count_++;
+    frame->page_id = page_id;
+    frame->is_dirty_ = true;
+    replacer_->SetEvictable(frame->frame_id_, false);
+    replacer_->RecordAccess(frame->frame_id_);
+    bpm_latch_->unlock();
     return WritePageGuard(page_id, frame, replacer_, bpm_latch_);
   }
 
@@ -274,6 +284,7 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
 
   // no available frame
   if (!frame) {
+    bpm_latch_->unlock();
     return std::nullopt;
   }
 
@@ -282,6 +293,12 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
   }
   SwapIn(page_id, frame);
 
+  frame->pin_count_++;
+  frame->page_id = page_id;
+  frame->is_dirty_ = true;
+  replacer_->SetEvictable(frame->frame_id_, false);
+  replacer_->RecordAccess(frame->frame_id_);
+  bpm_latch_->unlock();
   return WritePageGuard(page_id, frame, replacer_, bpm_latch_);
 }
 
@@ -310,12 +327,18 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
  * returns `std::nullopt`, otherwise returns a `ReadPageGuard` ensuring shared and read-only access to a page's data.
  */
 auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_type) -> std::optional<ReadPageGuard> {
-  std::scoped_lock slk(*bpm_latch_);
+  bpm_latch_->lock();
 
   // page already exists in frames
   auto f_exist = GetFrame(page_id);
   if (f_exist.has_value()) {
     auto frame = f_exist.value();
+
+    frame->pin_count_++;
+    frame->page_id = page_id;
+    replacer_->SetEvictable(frame->frame_id_, false);
+    replacer_->RecordAccess(frame->frame_id_);
+    bpm_latch_->unlock();
     return ReadPageGuard(page_id, frame, replacer_, bpm_latch_);
   }
 
@@ -335,6 +358,7 @@ auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_typ
 
   // no available frame
   if (!frame) {
+    bpm_latch_->unlock();
     return std::nullopt;
   }
 
@@ -342,7 +366,12 @@ auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_typ
     FlushPage(frame->page_id);
   }
   SwapIn(page_id, frame);
-  
+
+  frame->pin_count_++;
+  frame->page_id = page_id;
+  replacer_->SetEvictable(frame->frame_id_, false);
+  replacer_->RecordAccess(frame->frame_id_);
+  bpm_latch_->unlock();
   return ReadPageGuard(page_id, frame, replacer_, bpm_latch_);
 }
 
@@ -418,13 +447,13 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
     return false;
   }
   BUSTUB_ENSURE(page_id == frame.value()->page_id, "Page ID unconsistent\n");
-   
+
   auto promise = disk_scheduler_->CreatePromise();
   auto future = promise.get_future();
   disk_scheduler_->Schedule(DiskRequest{true, frame.value()->data_.data(), page_id, std::move(promise)});
   future.get();
   frame.value()->is_dirty_ = false;
-  
+
   return true;
 }
 
@@ -467,7 +496,9 @@ void BufferPoolManager::FlushAllPages() { UNIMPLEMENTED("TODO(P1): Add implement
 auto BufferPoolManager::GetPinCount(page_id_t page_id) -> std::optional<size_t> {
   std::scoped_lock slk(*bpm_latch_);
   auto iter = page_table_.find(page_id);
-  if (iter == page_table_.end()) return std::nullopt;
+  if (iter == page_table_.end()) {
+    return std::nullopt;
+  }
   return frames_[iter->second]->pin_count_.load();
 }
 
