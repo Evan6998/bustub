@@ -96,7 +96,7 @@ class FrameHeader {
    * else in the buffer pool manager...
    */
 
-  page_id_t page_id{-1};
+  page_id_t page_id_{-1};
 };
 
 /**

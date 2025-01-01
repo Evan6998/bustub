@@ -44,7 +44,7 @@ void FrameHeader::Reset() {
   std::fill(data_.begin(), data_.end(), 0);
   pin_count_.store(0);
   is_dirty_ = false;
-  page_id = -1;
+  page_id_ = -1;
 }
 
 /**
@@ -188,7 +188,7 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
   }
 
   if (frame->is_dirty_) {
-    FlushPage(frame->page_id);
+    FlushPage(frame->page_id_);
   }
 
   free_frames_.push_back(frame->frame_id_);
@@ -207,7 +207,7 @@ void BufferPoolManager::SwapIn(page_id_t page_id, const std::shared_ptr<FrameHea
   disk_scheduler_->Schedule(DiskRequest{false, frame->data_.data(), page_id, std::move(promise)});
   future.get();
 
-  page_table_.erase(frame->page_id);
+  page_table_.erase(frame->page_id_);
   page_table_[page_id] = frame->frame_id_;
 }
 
@@ -258,7 +258,7 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
   if (f_exist.has_value()) {
     auto frame = f_exist.value();
     frame->pin_count_++;
-    frame->page_id = page_id;
+    frame->page_id_ = page_id;
     frame->is_dirty_ = true;
     replacer_->SetEvictable(frame->frame_id_, false);
     replacer_->RecordAccess(frame->frame_id_);
@@ -287,12 +287,12 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
   }
 
   if (frame->is_dirty_) {
-    FlushPage(frame->page_id);
+    FlushPage(frame->page_id_);
   }
   SwapIn(page_id, frame);
 
   frame->pin_count_++;
-  frame->page_id = page_id;
+  frame->page_id_ = page_id;
   frame->is_dirty_ = true;
   replacer_->SetEvictable(frame->frame_id_, false);
   replacer_->RecordAccess(frame->frame_id_);
@@ -333,7 +333,7 @@ auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_typ
     auto frame = f_exist.value();
 
     frame->pin_count_++;
-    frame->page_id = page_id;
+    frame->page_id_ = page_id;
     replacer_->SetEvictable(frame->frame_id_, false);
     replacer_->RecordAccess(frame->frame_id_);
     bpm_latch_->unlock();
@@ -361,12 +361,12 @@ auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_typ
   }
 
   if (frame->is_dirty_) {
-    FlushPage(frame->page_id);
+    FlushPage(frame->page_id_);
   }
   SwapIn(page_id, frame);
 
   frame->pin_count_++;
-  frame->page_id = page_id;
+  frame->page_id_ = page_id;
   replacer_->SetEvictable(frame->frame_id_, false);
   replacer_->RecordAccess(frame->frame_id_);
   bpm_latch_->unlock();
@@ -444,7 +444,7 @@ auto BufferPoolManager::FlushPage(page_id_t page_id) -> bool {
   if (!frame) {
     return false;
   }
-  BUSTUB_ENSURE(page_id == frame.value()->page_id, "Page ID unconsistent\n");
+  BUSTUB_ENSURE(page_id == frame.value()->page_id_, "Page ID unconsistent\n");
 
   auto promise = disk_scheduler_->CreatePromise();
   auto future = promise.get_future();
