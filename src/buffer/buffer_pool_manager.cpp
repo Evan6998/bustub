@@ -21,9 +21,7 @@ namespace bustub {
  *
  * @param frame_id The frame ID / index of the frame we are creating a header for.
  */
-FrameHeader::FrameHeader(frame_id_t frame_id) : frame_id_(frame_id), data_(BUSTUB_PAGE_SIZE, 0) {
-  Reset();
-}
+FrameHeader::FrameHeader(frame_id_t frame_id) : frame_id_(frame_id), data_(BUSTUB_PAGE_SIZE, 0) { Reset(); }
 
 /**
  * @brief Get a raw const pointer to the frame's data.
@@ -202,7 +200,7 @@ auto BufferPoolManager::DeletePage(page_id_t page_id) -> bool {
   return true;
 }
 
-void BufferPoolManager::SwapIn(page_id_t page_id, const std::shared_ptr<FrameHeader> frame) {
+void BufferPoolManager::SwapIn(page_id_t page_id, const std::shared_ptr<FrameHeader> &frame) {
   BUSTUB_ENSURE(page_id >= 0, "Invalid Page ID\n")
   auto promise = disk_scheduler_->CreatePromise();
   auto future = promise.get_future();

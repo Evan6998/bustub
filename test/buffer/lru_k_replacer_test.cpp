@@ -262,4 +262,186 @@ TEST(LRUKReplacerExtendedTest, LargerNumberOfFrames) {
   ASSERT_EQ(0, lru_replacer.Size());
 }
 
+/**
+ * @brief Test the LRU-K replacer with k=1 and only 1 frame capacity.
+ * This scenario ensures that every new access immediately places
+ * the frame at the "fully known distance," which might be less
+ * trivial for k=1 logic.
+ */
+TEST(LRUKReplacerCornerCaseTest, K1SingleFrame) {
+  // Create an LRU-K replacer with capacity=1 and k=1
+  LRUKReplacer lru_replacer(1, 1);
+
+  // Record access on frame 0, mark it evictable
+  lru_replacer.RecordAccess(0);
+  lru_replacer.SetEvictable(0, true);
+
+  ASSERT_EQ(1, lru_replacer.Size());
+
+  // Evict it
+  auto victim = lru_replacer.Evict();
+  ASSERT_TRUE(victim.has_value());
+  ASSERT_EQ(0, victim.value());
+  ASSERT_EQ(0, lru_replacer.Size());
+
+  // Try evicting again when empty
+  victim = lru_replacer.Evict();
+  ASSERT_FALSE(victim.has_value());
+  ASSERT_EQ(0, lru_replacer.Size());
+
+  // Re-insert the same frame, but mark it as non-evictable
+  lru_replacer.RecordAccess(0);
+  lru_replacer.SetEvictable(0, false);
+  ASSERT_EQ(0, lru_replacer.Size());
+
+  // Nothing to evict
+  victim = lru_replacer.Evict();
+  ASSERT_FALSE(victim.has_value());
+  ASSERT_EQ(0, lru_replacer.Size());
+}
+
+/**
+ * @brief Test evicting frames when some have never reached k accesses.
+ * We create a scenario with k=2 but some frames get only 1 or 0 accesses.
+ */
+TEST(LRUKReplacerCornerCaseTest, PartialAccessesBeforeEviction) {
+  LRUKReplacer lru_replacer(5, 2);
+
+  // Frames 0 and 1 each get one access.
+  lru_replacer.RecordAccess(0);
+  lru_replacer.RecordAccess(1);
+
+  // Frame 2 gets two accesses, fulfilling the K=2 requirement.
+  lru_replacer.RecordAccess(2);
+  lru_replacer.RecordAccess(2);
+
+  // Set all frames as evictable
+  lru_replacer.SetEvictable(0, true);
+  lru_replacer.SetEvictable(1, true);
+  lru_replacer.SetEvictable(2, true);
+
+  // No accesses for frames 3 and 4, but let's mark them evictable anyway.
+  lru_replacer.SetEvictable(3, true);
+  lru_replacer.SetEvictable(4, true);
+
+  // Check size is 5 because we’ve mentioned frames [0..4] as evictable,
+  // even though frames 3 and 4 have zero accesses.
+  ASSERT_EQ(5, lru_replacer.Size());
+
+  // We expect frames 3 and 4 to have "infinite" backward k-distance (0 accesses).
+  // Among the frames with fewer than k=2 accesses (0,1,3,4), the LRU rule for
+  // tie-breaking might lead to evicting 0 or 1 first (whichever was accessed earliest).
+  // But frames 3 and 4 also have 0 accesses, so they might be even older in timestamp
+  // terms if your implementation handles no-access frames specially.
+  // The exact order can vary by design, but let's just confirm eviction always returns a valid frame.
+
+  auto victim = lru_replacer.Evict();
+  ASSERT_TRUE(victim.has_value());
+  ASSERT_EQ(4, lru_replacer.Size());  // One down
+
+  victim = lru_replacer.Evict();
+  ASSERT_TRUE(victim.has_value());
+  ASSERT_EQ(3, lru_replacer.Size());
+
+  victim = lru_replacer.Evict();
+  ASSERT_TRUE(victim.has_value());
+  ASSERT_EQ(2, lru_replacer.Size());
+
+  // Evict remaining frames.
+  victim = lru_replacer.Evict();
+  ASSERT_TRUE(victim.has_value());
+  ASSERT_EQ(1, lru_replacer.Size());
+
+  victim = lru_replacer.Evict();
+  ASSERT_TRUE(victim.has_value());
+  ASSERT_EQ(0, lru_replacer.Size());
+
+  // Now the replacer is empty
+  victim = lru_replacer.Evict();
+  ASSERT_FALSE(victim.has_value());
+}
+
+/**
+ * @brief Test toggling frames between evictable and non-evictable repeatedly,
+ * making sure the LRU-K logic updates properly each time.
+ */
+TEST(LRUKReplacerCornerCaseTest, ToggleEvictableStatusRepeatedly) {
+  LRUKReplacer lru_replacer(4, 2);
+
+  // Add frames [10, 11], record some accesses
+  lru_replacer.RecordAccess(0);
+  lru_replacer.RecordAccess(0);
+  lru_replacer.RecordAccess(1);
+
+  // Initially mark them as evictable
+  lru_replacer.SetEvictable(0, true);
+  lru_replacer.SetEvictable(1, true);
+  ASSERT_EQ(2, lru_replacer.Size());
+
+  // Toggle 10 to non-evictable
+  lru_replacer.SetEvictable(0, false);
+  ASSERT_EQ(1, lru_replacer.Size());  // Only frame 11 is evictable now
+
+  // Now toggle 10 back to evictable
+  lru_replacer.SetEvictable(0, true);
+  ASSERT_EQ(2, lru_replacer.Size());
+
+  // Add a new frame 12 with one access
+  lru_replacer.RecordAccess(2);
+  lru_replacer.SetEvictable(2, true);
+  ASSERT_EQ(3, lru_replacer.Size());
+
+  // Evict one frame; the tie-breaking will vary depending on your internal times.
+  // We just confirm that we get a valid frame and the size is decremented.
+  auto victim = lru_replacer.Evict();
+  ASSERT_TRUE(victim.has_value());
+  ASSERT_EQ(2, lru_replacer.Size());
+
+  // Mark everything as non-evictable now
+  lru_replacer.SetEvictable(0, false);
+  lru_replacer.SetEvictable(1, false);
+  lru_replacer.SetEvictable(2, false);
+  ASSERT_EQ(0, lru_replacer.Size());
+
+  // Try eviction
+  victim = lru_replacer.Evict();
+  ASSERT_FALSE(victim.has_value());
+  ASSERT_EQ(0, lru_replacer.Size());
+}
+
+/**
+ * @brief Test the LRU-K replacer with k=2, but we access many frames
+ * in a round-robin manner to ensure no single frame dominates.
+ * This helps check correct time-stamp ordering and k-distance updates.
+ */
+TEST(LRUKReplacerCornerCaseTest, RoundRobinAccessPattern) {
+  const int total_frames = 6;
+  LRUKReplacer lru_replacer(total_frames, 2);
+
+  // Access each frame in a round-robin pattern, e.g., 0,1,2,3,4,5, 0,1,2,...
+  for (int round = 0; round < 3; round++) {
+    for (int f = 0; f < total_frames; f++) {
+      lru_replacer.RecordAccess(f);
+      lru_replacer.SetEvictable(f, true);
+    }
+  }
+
+  // At this point, each frame has been accessed 3 times.
+  // All are evictable, so replacer size should be = total_frames.
+  ASSERT_EQ(total_frames, lru_replacer.Size());
+
+  // We expect the frame with the oldest last access to be evicted first,
+  // but they might be close in time because we did a round-robin.
+  // We'll just confirm that all frames eventually get evicted in some order.
+  for (int i = 0; i < total_frames; i++) {
+    auto victim = lru_replacer.Evict();
+    ASSERT_TRUE(victim.has_value());
+  }
+  ASSERT_EQ(0, lru_replacer.Size());
+
+  // Another eviction should fail
+  auto victim = lru_replacer.Evict();
+  ASSERT_FALSE(victim.has_value());
+}
+
 }  // namespace bustub

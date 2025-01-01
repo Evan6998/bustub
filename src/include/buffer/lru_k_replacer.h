@@ -30,7 +30,7 @@ enum class AccessType { Unknown = 0, Lookup, Scan, Index };
 class LRUKNode {
  public:
   LRUKNode(size_t k, frame_id_t fid);
-  LRUKNode(LRUKNode &&other);
+  LRUKNode(LRUKNode &&other) noexcept;
 
   auto operator=(LRUKNode &&other) noexcept -> LRUKNode &;
 
@@ -39,9 +39,11 @@ class LRUKNode {
 
   auto Evictable() const -> bool;
 
+  auto Existence() const -> bool;
+
   auto KthDistance(size_t ts) const -> size_t;
 
-  auto LatestTimeStamp() const -> size_t;
+  auto EarliestTimeStamp() const -> size_t;
 
   void SetEvictable(bool set_evictable);
 
@@ -57,6 +59,7 @@ class LRUKNode {
   size_t k_;
   [[maybe_unused]] frame_id_t fid_;
   bool is_evictable_{false};
+  bool exist_{false};
 };
 
 /**

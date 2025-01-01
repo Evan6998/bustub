@@ -17,8 +17,8 @@ namespace bustub {
 
 LRUKNode::LRUKNode(size_t k, frame_id_t fid) : k_(k), fid_(fid){};
 
-LRUKNode::LRUKNode(LRUKNode &&other) : k_(other.k_), fid_(other.fid_) {
-  is_evictable_ = other.is_evictable_;
+LRUKNode::LRUKNode(LRUKNode &&other) noexcept
+    : k_(other.k_), fid_(other.fid_), is_evictable_(other.is_evictable_), exist_(other.exist_) {
   history_ = std::move(other.history_);
 }
 
@@ -26,11 +26,14 @@ auto LRUKNode::operator=(LRUKNode &&other) noexcept -> LRUKNode & {
   k_ = other.k_;
   fid_ = other.fid_;
   is_evictable_ = other.is_evictable_;
+  exist_ = other.exist_;
   history_ = std::move(other.history_);
   return *this;
 }
 
 auto LRUKNode::Evictable() const -> bool { return is_evictable_; }
+
+auto LRUKNode::Existence() const -> bool { return exist_; }
 
 auto LRUKNode::KthDistance(size_t ts) const -> size_t {
   if (history_.size() < k_) {
@@ -39,9 +42,10 @@ auto LRUKNode::KthDistance(size_t ts) const -> size_t {
   return ts - history_.back();
 }
 
-auto LRUKNode::LatestTimeStamp() const -> size_t { return history_.front(); }
+auto LRUKNode::EarliestTimeStamp() const -> size_t { return history_.back(); }
 
 void LRUKNode::Access(size_t ts) {
+  exist_ = true;
   if (history_.size() >= k_) {
     history_.pop_back();
   }
@@ -53,6 +57,7 @@ void LRUKNode::SetEvictable(bool set_evictable) { is_evictable_ = set_evictable;
 void LRUKNode::Evict() {
   history_.clear();
   is_evictable_ = false;
+  exist_ = false;
 }
 
 LRUKReplacer::LRUKReplacer(size_t num_frames, size_t k) : replacer_size_(num_frames), k_(k) {
@@ -74,7 +79,7 @@ auto LRUKReplacer::Evict() -> std::optional<frame_id_t> {
     }
 
     auto k_distance = node.KthDistance(current_timestamp_);
-    auto ts = node.LatestTimeStamp();
+    auto ts = node.EarliestTimeStamp();
 
     // Prioritize the frame with the largest k-distance
     if (!victim || k_distance > largest_distance || (k_distance == largest_distance && ts < earliest_timestamp)) {
@@ -126,6 +131,9 @@ void LRUKReplacer::Remove(frame_id_t frame_id) {
   }
   std::scoped_lock<std::mutex> slk(latch_);
   auto &node = node_store_.at(frame_id);
+  if (!node.Existence()) {
+    return;
+  }
   if (!node.Evictable()) {
     throw std::invalid_argument("Frame is not evictable.");
   }
@@ -133,6 +141,9 @@ void LRUKReplacer::Remove(frame_id_t frame_id) {
   curr_size_ -= 1;
 }
 
-auto LRUKReplacer::Size() -> size_t { return curr_size_; }
+auto LRUKReplacer::Size() -> size_t {
+  std::scoped_lock<std::mutex> slk(latch_);
+  return curr_size_;
+}
 
 }  // namespace bustub
