@@ -95,6 +95,8 @@ class FrameHeader {
    * currently storing. This might allow you to skip searching for the corresponding (page ID, frame ID) pair somewhere
    * else in the buffer pool manager...
    */
+
+  page_id_t page_id;
 };
 
 /**
@@ -170,5 +172,12 @@ class BufferPoolManager {
    * stored inside of it. Additionally, you may also want to implement a helper function that returns either a shared
    * pointer to a `FrameHeader` that already has a page's data stored inside of it, or an index to said `FrameHeader`.
    */
+
+  auto GetFreeFrame() -> std::optional<std::shared_ptr<FrameHeader>>;
+
+  auto GetFrame(page_id_t page_id) -> std::optional<std::shared_ptr<FrameHeader>>;
+
+  void SwapIn(page_id_t page_id, std::shared_ptr<FrameHeader> frame);
+
 };
 }  // namespace bustub

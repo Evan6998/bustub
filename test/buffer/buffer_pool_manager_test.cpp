@@ -27,7 +27,7 @@ const size_t FRAMES = 10;
 // Note that this test assumes you are using the an LRU-K replacement policy.
 const size_t K_DIST = 5;
 
-TEST(BufferPoolManagerTest, DISABLED_VeryBasicTest) {
+TEST(BufferPoolManagerTest, VeryBasicTest) {
   // A very basic test.
 
   auto disk_manager = std::make_shared<DiskManager>(db_fname);
@@ -62,7 +62,7 @@ TEST(BufferPoolManagerTest, DISABLED_VeryBasicTest) {
   ASSERT_TRUE(bpm->DeletePage(pid));
 }
 
-TEST(BufferPoolManagerTest, DISABLED_PagePinEasyTest) {
+TEST(BufferPoolManagerTest, PagePinEasyTest) {
   auto disk_manager = std::make_shared<DiskManager>(db_fname);
   auto bpm = std::make_shared<BufferPoolManager>(2, disk_manager.get(), 5);
 
@@ -157,7 +157,7 @@ TEST(BufferPoolManagerTest, DISABLED_PagePinEasyTest) {
   remove(disk_manager->GetLogFileName());
 }
 
-TEST(BufferPoolManagerTest, DISABLED_PagePinMediumTest) {
+TEST(BufferPoolManagerTest, PagePinMediumTest) {
   auto disk_manager = std::make_shared<DiskManager>(db_fname);
   auto bpm = std::make_shared<BufferPoolManager>(FRAMES, disk_manager.get(), K_DIST);
 
@@ -200,6 +200,7 @@ TEST(BufferPoolManagerTest, DISABLED_PagePinMediumTest) {
     EXPECT_EQ(1, bpm->GetPinCount(pid));
     pages.erase(pages.begin());
     EXPECT_EQ(0, bpm->GetPinCount(pid));
+
   }
 
   // Scenario: All of the pin counts of the pages we haven't dropped yet should still be 1.
@@ -235,7 +236,7 @@ TEST(BufferPoolManagerTest, DISABLED_PagePinMediumTest) {
   remove(db_fname);
 }
 
-TEST(BufferPoolManagerTest, DISABLED_PageAccessTest) {
+TEST(BufferPoolManagerTest, PageAccessTest) {
   const size_t rounds = 50;
 
   auto disk_manager = std::make_shared<DiskManager>(db_fname);
@@ -273,7 +274,7 @@ TEST(BufferPoolManagerTest, DISABLED_PageAccessTest) {
   thread.join();
 }
 
-TEST(BufferPoolManagerTest, DISABLED_ContentionTest) {
+TEST(BufferPoolManagerTest, ContentionTest) {
   auto disk_manager = std::make_shared<DiskManager>(db_fname);
   auto bpm = std::make_shared<BufferPoolManager>(FRAMES, disk_manager.get(), K_DIST);
 
@@ -355,7 +356,7 @@ TEST(BufferPoolManagerTest, DISABLED_DeadlockTest) {
   child.join();
 }
 
-TEST(BufferPoolManagerTest, DISABLED_EvictableTest) {
+TEST(BufferPoolManagerTest, EvictableTest) {
   // Test if the evictable status of a frame is always correct.
   size_t rounds = 1000;
   size_t num_readers = 8;
