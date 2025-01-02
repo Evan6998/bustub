@@ -251,52 +251,39 @@ void BufferPoolManager::SwapIn(page_id_t page_id, const std::shared_ptr<FrameHea
  * returns `std::nullopt`, otherwise returns a `WritePageGuard` ensuring exclusive and mutable access to a page's data.
  */
 auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_type) -> std::optional<WritePageGuard> {
-  bpm_latch_->lock();
+  // 1) Acquire the BPM latch using RAII.
+  std::unique_lock<std::mutex> lock(*bpm_latch_);
 
-  // page already exists in frames
-  auto f_exist = GetFrame(page_id);
-  if (f_exist.has_value()) {
-    auto frame = f_exist.value();
-    frame->pin_count_++;
-    frame->page_id_ = page_id;
-    frame->is_dirty_ = true;
-    replacer_->SetEvictable(frame->frame_id_, false);
-    replacer_->RecordAccess(frame->frame_id_);
-    bpm_latch_->unlock();
-    return WritePageGuard(page_id, frame, replacer_, bpm_latch_);
+  // 2) Check if the page is already in the page table
+  if (auto existing_frame = GetFrame(page_id)) {
+    // Pin and mark dirty
+    PinFrame(existing_frame.value(), page_id, /*is_dirty=*/true);
+
+    // Release latch and return
+    lock.unlock();
+    return WritePageGuard(page_id, existing_frame.value(), replacer_, bpm_latch_);
   }
 
-  std::shared_ptr<FrameHeader> frame;
-
-  auto f_free = GetFreeFrame();
-  if (f_free.has_value()) {
-    // there is a free frame
-    frame = f_free.value();
-  } else {
-    // evict a frame
-    auto f_evict = replacer_->Evict();
-    if (f_evict.has_value()) {
-      frame = frames_[f_evict.value()];
-    }
-  }
-
-  // no available frame
+  // 3) Otherwise, find a free frame or evict a frame
+  auto frame = FindFreeOrEvict();
   if (!frame) {
-    bpm_latch_->unlock();
+    // No frame available => out of memory
     return std::nullopt;
   }
 
+  // 4) If the chosen frame was dirty, flush it first
   if (frame->is_dirty_) {
     FlushPage(frame->page_id_);
   }
+
+  // 5) Swap in from disk
   SwapIn(page_id, frame);
 
-  frame->pin_count_++;
-  frame->page_id_ = page_id;
-  frame->is_dirty_ = true;
-  replacer_->SetEvictable(frame->frame_id_, false);
-  replacer_->RecordAccess(frame->frame_id_);
-  bpm_latch_->unlock();
+  // 6) Pin the frame and mark dirty
+  PinFrame(frame, page_id, /*is_dirty=*/true);
+
+  // 7) Unlock before returning the WritePageGuard
+  lock.unlock();
   return WritePageGuard(page_id, frame, replacer_, bpm_latch_);
 }
 
@@ -325,52 +312,73 @@ auto BufferPoolManager::CheckedWritePage(page_id_t page_id, AccessType access_ty
  * returns `std::nullopt`, otherwise returns a `ReadPageGuard` ensuring shared and read-only access to a page's data.
  */
 auto BufferPoolManager::CheckedReadPage(page_id_t page_id, AccessType access_type) -> std::optional<ReadPageGuard> {
-  bpm_latch_->lock();
+  // Use RAII-style locking so we don't have to manually unlock in every path.
+  std::unique_lock<std::mutex> lock(*bpm_latch_);
 
-  // page already exists in frames
-  auto f_exist = GetFrame(page_id);
-  if (f_exist.has_value()) {
-    auto frame = f_exist.value();
-
-    frame->pin_count_++;
-    frame->page_id_ = page_id;
-    replacer_->SetEvictable(frame->frame_id_, false);
-    replacer_->RecordAccess(frame->frame_id_);
-    bpm_latch_->unlock();
-    return ReadPageGuard(page_id, frame, replacer_, bpm_latch_);
+  // 1) Check if the page is already in the page table
+  if (auto existing_frame = GetFrame(page_id)) {
+    PinFrame(existing_frame.value(), page_id, /*is_dirty=*/false);
+    // Once pinned, we can release the latch and return the guard
+    lock.unlock();
+    return ReadPageGuard(page_id, existing_frame.value(), replacer_, bpm_latch_);
   }
 
-  std::shared_ptr<FrameHeader> frame;
-
-  auto f_free = GetFreeFrame();
-  if (f_free.has_value()) {
-    // there is a free frame
-    frame = f_free.value();
-  } else {
-    // evict a frame
-    auto f_evict = replacer_->Evict();
-    if (f_evict.has_value()) {
-      frame = frames_[f_evict.value()];
-    }
-  }
-
-  // no available frame
+  // 2) Otherwise, find a free frame or evict an existing frame.
+  auto frame = FindFreeOrEvict();
   if (!frame) {
-    bpm_latch_->unlock();
+    // No frame available => out of memory
     return std::nullopt;
   }
 
+  // 3) If the chosen frame was dirty, flush it first so we don't lose data.
   if (frame->is_dirty_) {
     FlushPage(frame->page_id_);
   }
+
+  // 4) Swap the new page data from disk into this frame.
   SwapIn(page_id, frame);
 
-  frame->pin_count_++;
+  // 5) Pin the frame (no one can evict it until it's unpinned).
+  PinFrame(frame, page_id, /*is_dirty=*/false);
+
+  // 6) Now that we've updated everything, unlock and return the guard.
+  lock.unlock();
+  return ReadPageGuard(page_id, frame, replacer_, bpm_latch_);
+}
+
+/**
+ * @brief Find a free frame if available, otherwise evict an unpinned frame from the replacer.
+ *
+ * @return A shared pointer to a valid FrameHeader, or nullptr if we are out of memory.
+ */
+auto BufferPoolManager::FindFreeOrEvict() -> std::shared_ptr<FrameHeader> {
+  // Try to get a free frame first
+  if (auto f_free = GetFreeFrame(); f_free.has_value()) {
+    return f_free.value();
+  }
+  // Otherwise try eviction
+  if (auto f_evict = replacer_->Evict(); f_evict.has_value()) {
+    return frames_[f_evict.value()];
+  }
+  // No frame is available (all pinned)
+  return nullptr;
+}
+
+/**
+ * @brief Pin the given frame to indicate it's in use.
+ *
+ * @param frame The frame we want to pin
+ * @param page_id The page id to which we associate this frame
+ * @param is_dirty Whether or not we consider this page to be dirty
+ */
+void BufferPoolManager::PinFrame(const std::shared_ptr<FrameHeader> &frame, page_id_t page_id, bool is_dirty) {
+  frame->pin_count_.fetch_add(1);
   frame->page_id_ = page_id;
+  if (is_dirty) {
+    frame->is_dirty_ = true;
+  }
   replacer_->SetEvictable(frame->frame_id_, false);
   replacer_->RecordAccess(frame->frame_id_);
-  bpm_latch_->unlock();
-  return ReadPageGuard(page_id, frame, replacer_, bpm_latch_);
 }
 
 /**
